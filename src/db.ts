@@ -1,6 +1,11 @@
 import { DynamoDB } from "aws-sdk";
-import { CLIENT_TABLE, ENVIRONMENT_TABLE, RESERVATION_TABLE } from "./config";
-import { Client, EnvSlot, Reservation } from "./model";
+import {
+  CLIENT_TABLE,
+  ENVIRONMENT_TABLE,
+  FULFILLMENT_TABLE,
+  RESERVATION_TABLE,
+} from "./config";
+import { Client, EnvSlot, Fulfillment, Reservation } from "./model";
 
 const dynamo = new DynamoDB.DocumentClient({ region: "eu-west-1" });
 
@@ -190,3 +195,36 @@ export const setEnvironmentAsDirtyInDB = async (
     .promise()
     .then(() => true);
 };
+
+export const getFulfillmentFromDB = (id: string): Promise<Fulfillment | null> =>
+  dynamo
+    .get({
+      TableName: FULFILLMENT_TABLE,
+      Key: { id },
+    })
+    .promise()
+    .then(({ Item }) => {
+      if (!Item) {
+        return null;
+      }
+
+      return {
+        id: Item.id,
+        running: Item.running,
+      };
+    });
+
+export const persistFulfillmentToDB = async ({
+  id,
+  running,
+}: Fulfillment): Promise<boolean> =>
+  dynamo
+    .put({
+      TableName: FULFILLMENT_TABLE,
+      Item: {
+        id,
+        running,
+      },
+    })
+    .promise()
+    .then(() => true);

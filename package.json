@@ -17,6 +17,7 @@
     "prettier": "2.0.5",
     "prettier-plugin-organize-imports": "1.0.3",
     "serverless": "^1.82.0",
+    "serverless-step-functions": "^2.23.0",
     "serverless-webpack": "^5.2.0",
     "ts-loader": "^5.3.3",
     "ts-node": "^8.10.2",

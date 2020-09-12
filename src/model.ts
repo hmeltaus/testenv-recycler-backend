@@ -26,3 +26,8 @@ export interface Environment {
   reservationId: string | null;
   data: any;
 }
+
+export interface Fulfillment {
+  id: string;
+  running: boolean;
+}
