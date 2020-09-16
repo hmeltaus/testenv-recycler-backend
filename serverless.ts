@@ -4,7 +4,7 @@ const stage = "prod";
 const reservationTableName = `reservation-${stage}`;
 const clientTableName = `client-${stage}`;
 const environmentTableName = `environment-${stage}`;
-const fulfillmentTableName = `fulfillment-${stage}`;
+const processTableName = `process-${stage}`;
 
 const serverlessConfiguration: Serverless | any = {
   service: {
@@ -17,7 +17,11 @@ const serverlessConfiguration: Serverless | any = {
       includeModules: true,
     },
   },
-  plugins: ["serverless-webpack", "serverless-step-functions"],
+  plugins: [
+    "serverless-webpack",
+    "serverless-step-functions",
+    "serverless-pseudo-parameters",
+  ],
   provider: {
     stage,
     name: "aws",
@@ -32,8 +36,13 @@ const serverlessConfiguration: Serverless | any = {
       RESERVATION_TABLE: reservationTableName,
       CLIENT_TABLE: clientTableName,
       ENVIRONMENT_TABLE: environmentTableName,
-      FULFILLMENT_TABLE: fulfillmentTableName,
-      FULFILLMENT_ID: stage,
+      PROCESS_TABLE: processTableName,
+      FULFILL_STATE_MACHINE_ARN: {
+        "Fn::Ref": "CleanEnvironment",
+      },
+      CLEAN_STATE_MACHINE_ARN: {
+        "Fn::Ref": "FulfillReservations",
+      },
     },
     iamRoleStatements: [
       {
@@ -41,22 +50,32 @@ const serverlessConfiguration: Serverless | any = {
         Action: [
           "dynamodb:BatchWriteItem",
           "dynamodb:Query",
-          "dynamodb:getItem",
+          "dynamodb:Scan",
+          "dynamodb:GetItem",
           "dynamodb:UpdateItem",
           "dynamodb:PutItem",
         ],
         Resource: [
-          `arn:aws:dynamodb:eu-west-1:091338645050:table/${reservationTableName}`,
-          `arn:aws:dynamodb:eu-west-1:091338645050:table/${clientTableName}`,
-          `arn:aws:dynamodb:eu-west-1:091338645050:table/${environmentTableName}`,
-          `arn:aws:dynamodb:eu-west-1:091338645050:table/${fulfillmentTableName}`,
+          `arn:aws:dynamodb:eu-west-1:#{AWS::AccountId}:table/${reservationTableName}`,
+          `arn:aws:dynamodb:eu-west-1:#{AWS::AccountId}:table/${clientTableName}`,
+          `arn:aws:dynamodb:eu-west-1:#{AWS::AccountId}:table/${environmentTableName}`,
+          `arn:aws:dynamodb:eu-west-1:#{AWS::AccountId}:table/${processTableName}`,
         ],
+      },
+      {
+        Effect: "Allow",
+        Action: ["sts:AssumeRole"],
+        Resource: "*",
       },
     ],
   },
   functions: {
     authorizer: {
       handler: "handler.authorize",
+    },
+    cleanReservations: {
+      handler: "handler.cleanReservations",
+      events: [{ schedule: "rate(30 minutes)" }],
     },
     create: {
       handler: "handler.create",
@@ -119,9 +138,80 @@ const serverlessConfiguration: Serverless | any = {
       handler: "handler.fulfillmentStartProcess",
       name: `recycler-${stage}-start-process`,
     },
+    fulfillmentFulfillReservation: {
+      handler: "handler.fulfillmentFulfillReservation",
+      name: `recycler-${stage}-fulfill-reservation`,
+    },
+    cleanGetEnvironment: {
+      handler: "handler.cleanGetEnvironment",
+      name: `recycler-${stage}-clean-get-environment`,
+    },
+    cleanLoadResources: {
+      handler: "handler.cleanLoadResources",
+      name: `recycler-${stage}-clean-load-resources`,
+    },
+    cleanCleanResource: {
+      handler: "handler.cleanCleanResource",
+      name: `recycler-${stage}-clean-clean-resource`,
+    },
   },
   stepFunctions: {
     stateMachines: {
+      cleanEnvironment: {
+        name: "cleanEnvironment",
+        definition: {
+          Comment: "Clean environment",
+          StartAt: "getEnvironment",
+          States: {
+            getEnvironment: {
+              Type: "Task",
+              Resource: {
+                "Fn::GetAtt": ["cleanGetEnvironment", "Arn"],
+              },
+              Next: "endOrLoadResources",
+            },
+            endOrLoadResources: {
+              Type: "Choice",
+              Choices: [
+                {
+                  Variable: "$.environmentStatus",
+                  StringEquals: "dirty",
+                  Next: "loadResources",
+                },
+              ],
+              Default: "end",
+            },
+            end: {
+              Type: "Succeed",
+            },
+            loadResources: {
+              Type: "Task",
+              Resource: {
+                "Fn::GetAtt": ["cleanLoadResources", "Arn"],
+              },
+              Next: "cleanResource",
+            },
+            cleanResource: {
+              Type: "Task",
+              Resource: {
+                "Fn::GetAtt": ["cleanCleanResource", "Arn"],
+              },
+              Next: "endOrContinueCleaning",
+            },
+            endOrContinueCleaning: {
+              Type: "Choice",
+              Choices: [
+                {
+                  Variable: "$.ready",
+                  BooleanEquals: true,
+                  Next: "end",
+                },
+              ],
+              Default: "cleanResource",
+            },
+          },
+        },
+      },
       fulfillReservations: {
         name: "fulfillReservations",
         definition: {
@@ -161,18 +251,53 @@ const serverlessConfiguration: Serverless | any = {
               Resource: {
                 "Fn::GetAtt": ["fulfillmentGetOldestPendingReservation", "Arn"],
               },
-              Next: "beginReservationFulfillmentOrEndProcess",
+              Next: "fulfillReservationOrEndProcess",
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "endProcess",
+                },
+              ],
             },
-            beginReservationFulfillmentOrEndProcess: {
+            fulfillReservationOrEndProcess: {
               Type: "Choice",
               Choices: [
                 {
                   Variable: "$.reservation",
                   IsPresent: true,
-                  Next: "endProcess",
+                  Next: "fulfillReservation",
                 },
               ],
               Default: "endProcess",
+            },
+            fulfillReservation: {
+              Type: "Task",
+              Resource: {
+                "Fn::GetAtt": ["fulfillmentFulfillReservation", "Arn"],
+              },
+              Next: "waitOrContinueProcess",
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "endProcess",
+                },
+              ],
+            },
+            waitOrContinueProcess: {
+              Type: "Choice",
+              Choices: [
+                {
+                  Variable: "$.ready",
+                  BooleanEquals: true,
+                  Next: "getOldestPendingReservation",
+                },
+              ],
+              Default: "wait",
+            },
+            wait: {
+              Type: "Wait",
+              Seconds: 5,
+              Next: "getOldestPendingReservation",
             },
             endProcess: {
               Type: "Task",
@@ -238,8 +363,8 @@ const serverlessConfiguration: Serverless | any = {
             WriteCapacityUnits: 1,
           },
           KeySchema: [
-            { AttributeName: "type", KeyType: "HASH" },
-            { AttributeName: "id", KeyType: "RANGE" },
+            { AttributeName: "id", KeyType: "HASH" },
+            { AttributeName: "type", KeyType: "RANGE" },
           ],
           AttributeDefinitions: [
             {
@@ -253,11 +378,10 @@ const serverlessConfiguration: Serverless | any = {
           ],
         },
       },
-
       FulfillmentTable: {
         Type: "AWS::DynamoDB::Table",
         Properties: {
-          TableName: fulfillmentTableName,
+          TableName: processTableName,
           ProvisionedThroughput: {
             ReadCapacityUnits: 1,
             WriteCapacityUnits: 1,

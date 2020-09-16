@@ -1,8 +1,8 @@
 export interface EnvSlot {
   slot: string;
   environmentId: string | null;
-  status: "pending" | "ready" | "failed";
-  data: any;
+  status: "pending" | "ready" | "failed" | string;
+  data: any | null;
 }
 
 export interface Reservation {
@@ -10,7 +10,7 @@ export interface Reservation {
   type: string;
   created: number;
   expires: number;
-  status: "pending" | "ready" | "failed";
+  status: "pending" | "ready" | "failed" | "expired" | string;
   envs: EnvSlot[];
 }
 
@@ -22,12 +22,13 @@ export interface Client {
 export interface Environment {
   id: string;
   type: string;
-  status: "ready" | "reserved" | "dirty" | "cleaning";
+  status: "ready" | "reserved" | "dirty" | "cleaning" | string;
   reservationId: string | null;
-  data: any;
+  data: any | null;
 }
 
-export interface Fulfillment {
+export interface Process {
   id: string;
   running: boolean;
+  started: number | null;
 }

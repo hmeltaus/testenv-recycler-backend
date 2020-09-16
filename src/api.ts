@@ -1,16 +1,20 @@
 import { APIGatewayProxyHandler } from "aws-lambda";
+import { StepFunctions } from "aws-sdk";
 import { v4 as uuidv4 } from "uuid";
+import { CLEAN_STATE_MACHINE_ARN, FULFILL_STATE_MACHINE_ARN } from "./config";
+import { setEnvironmentAsDirtyInDB } from "./db/environment";
 import {
   getReservationFromDB,
   persistReservationToDB,
   removeReservationFromDB,
-  setEnvironmentAsDirtyInDB,
-} from "./db";
+} from "./db/reservation";
 import { EnvSlot, Reservation } from "./model";
 
 export interface CreateReservationBody {
   count: number;
 }
+
+const sf = new StepFunctions({ region: process.env.AWS_REGION });
 
 const parseCreateReservationBody = (json: string): CreateReservationBody =>
   JSON.parse(json) as CreateReservationBody;
@@ -23,7 +27,7 @@ const createEnvSlots = (type: string, count: number): EnvSlot[] => {
       status,
       environmentId: null,
       slot: `slot-${index}`,
-      data: {},
+      data: null,
     });
   }
 
@@ -51,6 +55,10 @@ export const create: APIGatewayProxyHandler = async (event, _context) => {
 
   try {
     await persistReservationToDB(reservation);
+    await sf
+      .startExecution({ stateMachineArn: FULFILL_STATE_MACHINE_ARN })
+      .promise();
+
     return {
       statusCode: 200,
       body: JSON.stringify(reservation, null, 2),
@@ -106,9 +114,17 @@ export const remove: APIGatewayProxyHandler = async (event, _context) => {
     console.log(`Reservation removed successfully`);
 
     await Promise.all(
-      reservation.envs.map((env) => {
-        setEnvironmentAsDirtyInDB(reservation.type, env.environmentId);
-      })
+      reservation.envs.map((env) =>
+        setEnvironmentAsDirtyInDB(env.environmentId, reservation.type).then(
+          () =>
+            sf
+              .startExecution({
+                stateMachineArn: CLEAN_STATE_MACHINE_ARN,
+                name: `${reservation.type}-${env.environmentId}`,
+              })
+              .promise()
+        )
+      )
     );
 
     return {

@@ -4,7 +4,7 @@ import {
 } from "aws-lambda";
 import { APIGatewayAuthorizerResultContext } from "aws-lambda/common/api-gateway";
 import bcrypt from "bcryptjs";
-import { getClientFromDB } from "./db";
+import { getClientFromDB } from "./db/client";
 
 const checkToken = async (token: string): Promise<boolean> => {
   console.log(token);

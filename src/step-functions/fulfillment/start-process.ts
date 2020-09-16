@@ -1,6 +1,5 @@
 import { Handler } from "aws-lambda";
-import { FULFILLMENT_ID } from "../../config";
-import { persistFulfillmentToDB } from "../../db";
+import { persistProcessToDB } from "../../db/process";
 
 interface StartProcessOutput {
   status: boolean;
@@ -10,9 +9,12 @@ export const startProcess: Handler<any, StartProcessOutput> = async (
   _event,
   _context
 ) => {
-  await persistFulfillmentToDB({
-    id: FULFILLMENT_ID,
+  console.log("Start process");
+
+  await persistProcessToDB({
+    id: "fulfillment",
     running: true,
+    started: Date.now(),
   });
 
   return {

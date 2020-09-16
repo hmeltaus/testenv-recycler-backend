@@ -1,6 +1,5 @@
 import { Handler } from "aws-lambda";
-import { FULFILLMENT_ID } from "../../config";
-import { getFulfillmentFromDB } from "../../db";
+import { getProcessFromDB } from "../../db/process";
 
 interface GetProcessStatusOutput {
   running: boolean;
@@ -10,7 +9,9 @@ export const getProcessStatus: Handler<any, GetProcessStatusOutput> = async (
   _event,
   _context
 ) => {
-  const fulfillment = await getFulfillmentFromDB(FULFILLMENT_ID);
+  console.log("Get process status");
+
+  const fulfillment = await getProcessFromDB("fulfillment");
   const running = fulfillment ? fulfillment.running : false;
 
   return {
