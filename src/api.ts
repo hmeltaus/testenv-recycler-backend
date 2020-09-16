@@ -121,6 +121,10 @@ export const remove: APIGatewayProxyHandler = async (event, _context) => {
               .startExecution({
                 stateMachineArn: CLEAN_STATE_MACHINE_ARN,
                 name: `${reservation.type}-${env.environmentId}`,
+                input: JSON.stringify({
+                  id: env.environmentId,
+                  type: reservation.type,
+                }),
               })
               .promise()
         )

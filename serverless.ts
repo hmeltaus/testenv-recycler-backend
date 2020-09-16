@@ -37,12 +37,10 @@ const serverlessConfiguration: Serverless | any = {
       CLIENT_TABLE: clientTableName,
       ENVIRONMENT_TABLE: environmentTableName,
       PROCESS_TABLE: processTableName,
-      FULFILL_STATE_MACHINE_ARN: {
-        "Fn::Ref": "CleanEnvironment",
-      },
-      CLEAN_STATE_MACHINE_ARN: {
-        "Fn::Ref": "FulfillReservations",
-      },
+      FULFILL_STATE_MACHINE_ARN:
+        "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:fulfillReservations",
+      CLEAN_STATE_MACHINE_ARN:
+        "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:cleanEnvironment",
     },
     iamRoleStatements: [
       {
@@ -56,16 +54,24 @@ const serverlessConfiguration: Serverless | any = {
           "dynamodb:PutItem",
         ],
         Resource: [
-          `arn:aws:dynamodb:eu-west-1:#{AWS::AccountId}:table/${reservationTableName}`,
-          `arn:aws:dynamodb:eu-west-1:#{AWS::AccountId}:table/${clientTableName}`,
-          `arn:aws:dynamodb:eu-west-1:#{AWS::AccountId}:table/${environmentTableName}`,
-          `arn:aws:dynamodb:eu-west-1:#{AWS::AccountId}:table/${processTableName}`,
+          `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${reservationTableName}`,
+          `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${clientTableName}`,
+          `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${environmentTableName}`,
+          `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${processTableName}`,
         ],
       },
       {
         Effect: "Allow",
         Action: ["sts:AssumeRole"],
         Resource: "*",
+      },
+      {
+        Effect: "Allow",
+        Action: ["states:StartExecution"],
+        Resource: [
+          "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:fulfillReservations",
+          "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:cleanEnvironment",
+        ],
       },
     ],
   },
