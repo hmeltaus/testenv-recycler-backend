@@ -11,7 +11,8 @@ import {
 import { EnvSlot, Reservation } from "./model";
 
 export interface CreateReservationBody {
-  count: number;
+  count?: number;
+  type?: string;
 }
 
 const sf = new StepFunctions({ region: process.env.AWS_REGION });
@@ -35,14 +36,26 @@ const createEnvSlots = (type: string, count: number): EnvSlot[] => {
 };
 
 export const create: APIGatewayProxyHandler = async (event, _context) => {
-  const body = parseCreateReservationBody(event.body);
+  const { type, count } = parseCreateReservationBody(event.body);
+
+  if (!type) {
+    throw new Error(`type is required`);
+  }
+
+  if (!count) {
+    throw new Error(`count is required`);
+  }
+
+  if (type !== "aws-account") {
+    throw new Error(`type '${type}' is not supported`);
+  }
 
   const id = uuidv4();
   const created = Date.now();
-  const expires = created + 1000 * 60 * 5;
-  const type = "aws-account";
+  const expires = created + 1000 * 60 * 5; // 5 mins
+
   const status = "pending";
-  const envs = createEnvSlots(type, body.count);
+  const envs = createEnvSlots(type, count);
 
   const reservation: Reservation = {
     id,
@@ -114,21 +127,23 @@ export const remove: APIGatewayProxyHandler = async (event, _context) => {
     console.log(`Reservation removed successfully`);
 
     await Promise.all(
-      reservation.envs.map((env) =>
-        setEnvironmentAsDirtyInDB(env.environmentId, reservation.type).then(
-          () =>
-            sf
-              .startExecution({
-                stateMachineArn: CLEAN_STATE_MACHINE_ARN,
-                name: `${reservation.type}-${env.environmentId}`,
-                input: JSON.stringify({
-                  id: env.environmentId,
-                  type: reservation.type,
-                }),
-              })
-              .promise()
+      reservation.envs
+        .filter((env) => env.environmentId !== null)
+        .map((env) =>
+          setEnvironmentAsDirtyInDB(env.environmentId, reservation.type).then(
+            () =>
+              sf
+                .startExecution({
+                  stateMachineArn: CLEAN_STATE_MACHINE_ARN,
+                  name: uuidv4(),
+                  input: JSON.stringify({
+                    id: env.environmentId,
+                    type: reservation.type,
+                  }),
+                })
+                .promise()
+          )
         )
-      )
     );
 
     return {

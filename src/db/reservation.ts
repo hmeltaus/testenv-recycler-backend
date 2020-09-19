@@ -300,6 +300,7 @@ export const setReservationSlotAsReadyInDB = async (
   data: any | null
 ): Promise<boolean> => {
   console.log(`Set reservation slot ${id}/${slot} as ready`);
+
   return dynamo
     .update({
       TableName: RESERVATION_TABLE,
@@ -316,14 +317,7 @@ export const setReservationSlotAsReadyInDB = async (
           Value: environmentId,
           Action: "PUT",
         },
-        data: data
-          ? {
-              Value: JSON.stringify(data),
-              Action: "PUT",
-            }
-          : {
-              Action: "DELETE",
-            },
+        data: data ? { Value: data, Action: "PUT" } : { Action: "DELETE" },
       },
     })
     .promise()

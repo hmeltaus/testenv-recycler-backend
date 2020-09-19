@@ -1,5 +1,6 @@
 import { Handler } from "aws-lambda";
 import { StepFunctions } from "aws-sdk";
+import { v4 as uuidv4 } from "uuid";
 import { CLEAN_STATE_MACHINE_ARN } from "../config";
 import { setEnvironmentAsDirtyInDB } from "../db/environment";
 import {
@@ -33,7 +34,7 @@ export const cleanReservations: Handler<any, any> = async (
           ).then(() =>
             sf.startExecution({
               stateMachineArn: CLEAN_STATE_MACHINE_ARN,
-              name: `${reservation.type}-${env.environmentId}`,
+              name: uuidv4(),
               input: JSON.stringify({
                 id: env.environmentId,
                 type: reservation.type,

@@ -81,7 +81,7 @@ const serverlessConfiguration: Serverless | any = {
     },
     cleanReservations: {
       handler: "handler.cleanReservations",
-      events: [{ schedule: "rate(30 minutes)" }],
+      events: [{ schedule: "rate(5 minutes)" }],
     },
     create: {
       handler: "handler.create",

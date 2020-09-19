@@ -7,9 +7,9 @@ import bcrypt from "bcryptjs";
 import { getClientFromDB } from "./db/client";
 
 const checkToken = async (token: string): Promise<boolean> => {
-  console.log(token);
+  let decodedToken = new Buffer(token, "base64").toString("ascii");
 
-  const [id, password] = token.split(":", 2);
+  const [id, password] = decodedToken.split(":", 2);
 
   if (!id || !password) {
     return false;
