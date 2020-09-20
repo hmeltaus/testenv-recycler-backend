@@ -1,8 +1,7 @@
-export interface EnvironmentData {}
+import { Account } from "../model";
 
-export interface Cleaner<D extends EnvironmentData> {
-  readonly environmentType: string;
+export interface Cleaner {
   readonly resourceType: string;
   readonly depends: string[];
-  clean: (environmentData: D) => Promise<boolean>;
+  clean: (account: Account) => Promise<boolean>;
 }

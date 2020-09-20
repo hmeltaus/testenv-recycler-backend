@@ -1,16 +1,13 @@
 import { Key } from "aws-sdk/clients/dynamodb";
-import { ENVIRONMENT_TABLE } from "../config";
-import { Environment } from "../model";
+import { ACCOUNT_TABLE } from "../config";
+import { Account } from "../model";
 import { dynamo } from "./common";
 
-export const getEnvironmentFromDB = (
-  id: string,
-  type: string
-): Promise<Environment | null> =>
+export const getAccountFromDB = (id: string): Promise<Account | null> =>
   dynamo
     .get({
-      TableName: ENVIRONMENT_TABLE,
-      Key: { id, type },
+      TableName: ACCOUNT_TABLE,
+      Key: { id },
     })
     .promise()
     .then(({ Item }) => {
@@ -20,23 +17,17 @@ export const getEnvironmentFromDB = (
 
       return {
         id: Item.id,
-        type: Item.type,
         status: Item.status,
         reservationId: Item.reservationId || null,
-        data: Item.data || null,
+        managementRoleArn: Item.managementRoleArn,
       };
     });
 
-export const setEnvironmentAsDirtyInDB = async (
-  id: string,
-  type: string
-): Promise<boolean> => {
-  console.log(`Set environment as dirty type: ${type}, id: ${id}`);
+export const setAccountAsDirtyInDB = async (id: string): Promise<boolean> => {
   return dynamo
     .update({
-      TableName: ENVIRONMENT_TABLE,
+      TableName: ACCOUNT_TABLE,
       Key: {
-        type,
         id,
       },
       AttributeUpdates: {
@@ -53,16 +44,11 @@ export const setEnvironmentAsDirtyInDB = async (
     .then(() => true);
 };
 
-export const setEnvironmentAsReadyInDB = async (
-  id: string,
-  type: string
-): Promise<boolean> => {
-  console.log(`Set environment as ready type: ${type}, id: ${id}`);
+export const setAccountAsReadyInDB = async (id: string): Promise<boolean> => {
   return dynamo
     .update({
-      TableName: ENVIRONMENT_TABLE,
+      TableName: ACCOUNT_TABLE,
       Key: {
-        type,
         id,
       },
       AttributeUpdates: {
@@ -76,17 +62,14 @@ export const setEnvironmentAsReadyInDB = async (
     .then(() => true);
 };
 
-export const setEnvironmentAsReservedInDB = async (
+export const setAccountAsReservedInDB = async (
   id: string,
-  type: string,
   reservationId: string
 ): Promise<boolean> => {
-  console.log(`Set environment as reserved type: ${type}, id: ${id}`);
   return dynamo
     .update({
-      TableName: ENVIRONMENT_TABLE,
+      TableName: ACCOUNT_TABLE,
       Key: {
-        type,
         id,
       },
       AttributeUpdates: {
@@ -104,20 +87,15 @@ export const setEnvironmentAsReservedInDB = async (
     .then(() => true);
 };
 
-const listReadyEnvironmentsByTypeWithPagingFromDB = async (
-  type: string,
+const listReadyAccountsByWithPagingFromDB = async (
   collected: any[],
   startKey?: Key
 ): Promise<any[]> =>
   dynamo
     .scan({
-      TableName: ENVIRONMENT_TABLE,
+      TableName: ACCOUNT_TABLE,
       ExclusiveStartKey: startKey,
       ScanFilter: {
-        type: {
-          AttributeValueList: [type],
-          ComparisonOperator: "EQ",
-        },
         status: {
           AttributeValueList: ["ready"],
           ComparisonOperator: "EQ",
@@ -126,29 +104,22 @@ const listReadyEnvironmentsByTypeWithPagingFromDB = async (
     })
     .promise()
     .then(({ Items, LastEvaluatedKey }) => {
-      console.log(
-        `Scan returned ${Items.length} items, last evaluated key is ${LastEvaluatedKey}`
-      );
       if (!LastEvaluatedKey) {
         return [...collected, ...Items];
       }
 
-      return listReadyEnvironmentsByTypeWithPagingFromDB(
-        type,
+      return listReadyAccountsByWithPagingFromDB(
         [...collected, ...Items],
         LastEvaluatedKey
       );
     });
 
-export const listReadyEnvironmentsByTypeFromDB = async (
-  type: string
-): Promise<Environment[]> =>
-  listReadyEnvironmentsByTypeWithPagingFromDB(type, []).then((collected) =>
+export const listReadyAccountsFromDB = async (): Promise<Account[]> =>
+  listReadyAccountsByWithPagingFromDB([]).then((collected) =>
     collected.map((item) => ({
       id: item.id,
-      type: item.type,
       status: item.status,
       reservationId: item.reservationId || null,
-      data: item.data || null,
+      managementRoleArn: item.managementRoleArn,
     }))
   );

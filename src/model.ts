@@ -1,30 +1,37 @@
-export interface EnvSlot {
+export interface AccountSlot {
   slot: string;
-  environmentId: string | null;
+  accountId: string | null;
   status: "pending" | "ready" | "failed" | string;
-  data: any | null;
+}
+
+export interface ReservationCredentials {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
 }
 
 export interface Reservation {
   id: string;
-  type: string;
   created: number;
   expires: number;
   status: "pending" | "ready" | "failed" | "expired" | string;
-  envs: EnvSlot[];
+  accounts: AccountSlot[];
 }
 
-export interface Client {
-  id: string;
+export interface ReservationWithCredentials extends Reservation {
+  credentials: ReservationCredentials | null;
+}
+
+export interface User {
+  username: string;
   password: string;
 }
 
-export interface Environment {
+export interface Account {
   id: string;
-  type: string;
   status: "ready" | "reserved" | "dirty" | "cleaning" | string;
   reservationId: string | null;
-  data: any | null;
+  managementRoleArn: string;
 }
 
 export interface Process {

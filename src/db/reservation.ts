@@ -1,60 +1,56 @@
 import { AttributeMap, Key } from "aws-sdk/clients/dynamodb";
 import { RESERVATION_TABLE } from "../config";
-import { EnvSlot, Reservation } from "../model";
+import { AccountSlot, Reservation } from "../model";
 import { dynamo } from "./common";
 
 export interface ReservationDBItem {
   id: string;
   slot: string;
-  type: string;
   created: number;
   expires: number;
   status: string;
 }
 
-export interface EnvSlotDBItem {
+export interface AccountSlotDBItem {
   id: string;
   slot: string;
   status: string;
-  data: string;
-  environmentId?: string;
+  accountId?: string;
 }
 
-export type ReservationTableItem = ReservationDBItem | EnvSlotDBItem;
+export type ReservationTableItem = ReservationDBItem | AccountSlotDBItem;
 
 const convertToReservationDbItem = ({
   id,
   status,
   created,
   expires,
-  type,
 }: Reservation): ReservationDBItem => ({
   id,
   status,
   created,
   expires,
-  type,
+
   slot: "reservation",
 });
 
-const convertToEnvSlotDBItem = (
+const convertToAccountSlotDBItem = (
   reservationId: string,
-  { data, slot, status, environmentId }: EnvSlot
-): EnvSlotDBItem => {
+  { slot, status, accountId }: AccountSlot
+): AccountSlotDBItem => {
   const item = {
     id: reservationId,
     slot,
     status,
-    data: data ? JSON.stringify(data) : undefined,
   };
 
-  if (!environmentId) {
+  if (!accountId) {
     return item;
   }
 
   return {
     ...item,
-    environmentId,
+    accountId,
   };
 };
 
@@ -63,8 +59,8 @@ export const persistReservationToDB = async (
 ): Promise<boolean> => {
   const items: ReservationTableItem[] = [
     convertToReservationDbItem(reservation),
-    ...reservation.envs.map((env) =>
-      convertToEnvSlotDBItem(reservation.id, env)
+    ...reservation.accounts.map((account) =>
+      convertToAccountSlotDBItem(reservation.id, account)
     ),
   ];
 
@@ -98,20 +94,18 @@ export const getReservationFromDB = async (
       }
 
       const reservation = Items.find((item) => item.slot === "reservation");
-      const envs = Items.filter((item) => item.slot !== "reservation");
+      const accounts = Items.filter((item) => item.slot !== "reservation");
 
       return {
         id: reservation.id,
         status: reservation.status,
         created: reservation.created,
         expires: reservation.expires,
-        type: reservation.type,
         slot: "reservation",
-        envs: envs.map(({ slot, status, data, environmentId }) => ({
+        accounts: accounts.map(({ slot, status, accountId }) => ({
           slot,
           status,
-          data: data || null,
-          environmentId: environmentId || null,
+          accountId: accountId || null,
         })),
       };
     });
@@ -126,7 +120,7 @@ export const removeReservationFromDB = async (
 
   const requests = [
     { id: reservation.id, slot: "reservation" },
-    ...reservation.envs.map((r) => ({
+    ...reservation.accounts.map((r) => ({
       id: reservation.id,
       slot: r.slot,
     })),
@@ -198,7 +192,7 @@ export const listReservationsFromDB = async (
       const reservation = reservationItems.find(
         (item) => item.slot === "reservation"
       );
-      const envs = reservationItems.filter(
+      const accounts = reservationItems.filter(
         (item) => item.slot !== "reservation"
       );
 
@@ -207,12 +201,10 @@ export const listReservationsFromDB = async (
         status: reservation.status,
         created: parseInt(reservation.created, 10),
         expires: parseInt(reservation.expires, 10),
-        type: reservation.type,
-        envs: envs.map((slot) => ({
+        accounts: accounts.map((slot) => ({
           slot: slot.slot,
           status: slot.status,
-          environmentId: slot.environmentId || null,
-          data: slot.data || null,
+          accountId: slot.accountId || null,
         })),
       });
     }
@@ -296,8 +288,7 @@ export const setReservationSlotAsExpiredInDB = async (
 export const setReservationSlotAsReadyInDB = async (
   id: string,
   slot: string,
-  environmentId: string,
-  data: any | null
+  accountId: string
 ): Promise<boolean> => {
   console.log(`Set reservation slot ${id}/${slot} as ready`);
 
@@ -313,11 +304,10 @@ export const setReservationSlotAsReadyInDB = async (
           Value: "ready",
           Action: "PUT",
         },
-        environmentId: {
-          Value: environmentId,
+        accountId: {
+          Value: accountId,
           Action: "PUT",
         },
-        data: data ? { Value: data, Action: "PUT" } : { Action: "DELETE" },
       },
     })
     .promise()

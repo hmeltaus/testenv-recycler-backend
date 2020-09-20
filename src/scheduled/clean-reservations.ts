@@ -1,8 +1,8 @@
 import { Handler } from "aws-lambda";
 import { StepFunctions } from "aws-sdk";
 import { v4 as uuidv4 } from "uuid";
-import { CLEAN_STATE_MACHINE_ARN } from "../config";
-import { setEnvironmentAsDirtyInDB } from "../db/environment";
+import { CLEAN_ACCOUNT_STATE_MACHINE_ARN } from "../config";
+import { setAccountAsDirtyInDB } from "../db/account";
 import {
   listExpiredReservationsFromDB,
   removeReservationFromDB,
@@ -24,20 +24,15 @@ export const cleanReservations: Handler<any, any> = async (
     await removeReservationFromDB(reservation.id);
 
     await Promise.all(
-      reservation.envs
-        .filter((env) => env.environmentId !== null)
-        .map((env) => {
-          console.log(`Mark environment ${env.environmentId} as dirty`);
-          return setEnvironmentAsDirtyInDB(
-            env.environmentId,
-            reservation.type
-          ).then(() =>
+      reservation.accounts
+        .filter((slot) => slot.accountId !== null)
+        .map((slot) => {
+          return setAccountAsDirtyInDB(slot.accountId).then(() =>
             sf.startExecution({
-              stateMachineArn: CLEAN_STATE_MACHINE_ARN,
+              stateMachineArn: CLEAN_ACCOUNT_STATE_MACHINE_ARN,
               name: uuidv4(),
               input: JSON.stringify({
-                id: env.environmentId,
-                type: reservation.type,
+                id: slot.accountId,
               }),
             })
           );

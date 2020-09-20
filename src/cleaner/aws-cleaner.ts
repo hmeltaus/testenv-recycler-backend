@@ -7,12 +7,8 @@ import {
 } from "aws-sdk";
 import { ConfigurationOptions } from "aws-sdk/lib/config-base";
 import * as https from "https";
-import { Cleaner, EnvironmentData } from "../cleaner";
-
-export interface AwsAccountEnvironmentData extends EnvironmentData {
-  accountId: string;
-  iamRoleArn?: string;
-}
+import { Account } from "../model";
+import { Cleaner } from "./cleaner";
 
 export interface PagedResponse {
   readonly nextToken?: string;
@@ -31,9 +27,7 @@ export const randomInt = (min: number, max: number): number => {
   return Math.floor(Math.random() * (maxF - minC + 1) + minC);
 };
 
-export abstract class AwsCleaner<C, A>
-  implements Cleaner<AwsAccountEnvironmentData> {
-  readonly environmentType: string = "aws-account";
+export abstract class AwsCleaner<C, A> implements Cleaner {
   readonly depends: string[] = [];
   abstract readonly resourceType: string;
 
@@ -63,16 +57,16 @@ export abstract class AwsCleaner<C, A>
         ])
     );
 
-  clean = async (data: AwsAccountEnvironmentData): Promise<boolean> => {
+  clean = async (account: Account): Promise<boolean> => {
     for (let region of this.regions) {
       console.log(`About to clean region: ${region}`);
-      const resources = await this.getResourcesToClean(data, region);
+      const resources = await this.getResourcesToClean(account, region);
       console.log(
         `Found ${resources.length} resources of type ${this.resourceType} from region ${region}`
       );
       const ids = await Promise.all(
         resources
-          .map((r) => this.cleanResource(data, region, r))
+          .map((r) => this.cleanResource(account, region, r))
           .map((id) => {
             console.log(
               `Cleaned resource ${id} of type ${this.resourceType} from region ${region}`
@@ -96,12 +90,12 @@ export abstract class AwsCleaner<C, A>
   ): C;
 
   protected abstract getResourcesToClean(
-    data: AwsAccountEnvironmentData,
+    account: Account,
     region: string
   ): Promise<A[]>;
 
   protected abstract cleanResource(
-    data: AwsAccountEnvironmentData,
+    account: Account,
     region: string,
     resource: A
   ): Promise<string>;
@@ -146,11 +140,13 @@ export abstract class AwsCleaner<C, A>
     };
   };
 
-  private getCredentialsForEnvironment = async (
-    data: AwsAccountEnvironmentData
+  private getCredentialsForAccount = async (
+    account: Account
   ): Promise<Credentials> => {
-    if (data.iamRoleArn) {
-      const cp = await this.credentialProviderForRole(data.iamRoleArn);
+    if (account.managementRoleArn) {
+      const cp = await this.credentialProviderForRole(
+        account.managementRoleArn
+      );
       return cp.resolvePromise();
     }
 
@@ -158,24 +154,24 @@ export abstract class AwsCleaner<C, A>
   };
 
   protected withClient = async <T>(
-    data: AwsAccountEnvironmentData,
+    account: Account,
     region: string,
     fn: (client: C) => Promise<T>
   ): Promise<T> =>
-    this.getCredentialsForEnvironment(data)
+    this.getCredentialsForAccount(account)
       .then((credentials) =>
         this.getClient(credentials, region, this.clientOptions())
       )
       .then(fn);
 
   protected withClientPromise = async <T, R>(
-    data: AwsAccountEnvironmentData,
+    account: Account,
     region: string,
     fn: (client: C) => Request<R, AWSError>,
     onSuccess: (result: R) => T,
     onError?: (e: any) => T
   ): Promise<T> =>
-    this.getCredentialsForEnvironment(data)
+    this.getCredentialsForAccount(account)
       .then((credentials) =>
         this.getClient(credentials, region, this.clientOptions())
       )

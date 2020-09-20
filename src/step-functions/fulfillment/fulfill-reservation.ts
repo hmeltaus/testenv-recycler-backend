@@ -1,8 +1,8 @@
 import { Handler } from "aws-lambda";
 import {
-  listReadyEnvironmentsByTypeFromDB,
-  setEnvironmentAsReservedInDB,
-} from "../../db/environment";
+  listReadyAccountsFromDB,
+  setAccountAsReservedInDB,
+} from "../../db/account";
 import {
   setReservationAsExpiredInDB,
   setReservationAsReadyInDB,
@@ -33,8 +33,8 @@ export const fulfillReservation: Handler<
     console.log(`Reservation ${reservation.id} has expired`);
     await setReservationAsExpiredInDB(reservation.id);
     await Promise.all(
-      reservation.envs.map((env) =>
-        setReservationSlotAsExpiredInDB(reservation.id, env.slot)
+      reservation.accounts.map((account) =>
+        setReservationSlotAsExpiredInDB(reservation.id, account.slot)
       )
     );
 
@@ -43,7 +43,9 @@ export const fulfillReservation: Handler<
     };
   }
 
-  const pendingSlots = reservation.envs.filter((s) => s.status === "pending");
+  const pendingSlots = reservation.accounts.filter(
+    (s) => s.status === "pending"
+  );
   console.log(
     `Reservation ${reservation.id} has ${pendingSlots.length} pending slots`
   );
@@ -55,10 +57,8 @@ export const fulfillReservation: Handler<
     };
   }
 
-  const readyEnvironments = await listReadyEnvironmentsByTypeFromDB(
-    reservation.type
-  );
-  console.log(`Found ${readyEnvironments.length} ready environments`);
+  const readyEnvironments = await listReadyAccountsFromDB();
+  console.log(`Found ${readyEnvironments.length} ready accounts`);
 
   if (readyEnvironments.length === 0) {
     return {
@@ -71,16 +71,11 @@ export const fulfillReservation: Handler<
     const slot = pendingSlots[i];
     const environment = readyEnvironments[i];
     console.log(`Assign environment ${environment.id} to slot ${slot.slot}`);
-    await setEnvironmentAsReservedInDB(
-      environment.id,
-      environment.type,
-      reservation.id
-    );
+    await setAccountAsReservedInDB(environment.id, reservation.id);
     await setReservationSlotAsReadyInDB(
       reservation.id,
       slot.slot,
-      environment.id,
-      environment.data
+      environment.id
     );
   }
 

@@ -3,24 +3,35 @@ import {
   APIGatewayTokenAuthorizerEvent,
 } from "aws-lambda";
 import { APIGatewayAuthorizerResultContext } from "aws-lambda/common/api-gateway";
-import bcrypt from "bcryptjs";
-import { getClientFromDB } from "./db/client";
+import {
+  checkExpirationStatus,
+  DecodeResult,
+  decodeSession,
+  ExpirationStatus,
+  getJwtSecret,
+} from "./auth";
 
-const checkToken = async (token: string): Promise<boolean> => {
-  let decodedToken = new Buffer(token, "base64").toString("ascii");
-
-  const [id, password] = decodedToken.split(":", 2);
-
-  if (!id || !password) {
+const checkToken = async (header: string): Promise<boolean> => {
+  const [alg, token] = header.split(" ");
+  if (alg !== "Bearer") {
     return false;
   }
 
-  const client = await getClientFromDB(id);
-  if (!client) {
+  const secret = await getJwtSecret();
+
+  const decodedSession: DecodeResult = decodeSession(secret, token);
+  if (
+    decodedSession.type === "integrity-error" ||
+    decodedSession.type === "invalid-token"
+  ) {
     return false;
   }
 
-  return bcrypt.compare(password, client.password);
+  const expiration: ExpirationStatus = checkExpirationStatus(
+    decodedSession.session
+  );
+
+  return expiration === "active";
 };
 
 export const authorize: APIGatewayAuthorizerHandler = async (

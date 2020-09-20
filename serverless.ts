@@ -2,15 +2,16 @@ import type { Serverless } from "serverless/aws";
 
 const stage = "prod";
 const reservationTableName = `reservation-${stage}`;
-const clientTableName = `client-${stage}`;
-const environmentTableName = `environment-${stage}`;
+const userTableName = `user-${stage}`;
 const processTableName = `process-${stage}`;
+const accountTableName = `account-${stage}`;
+const jwtSecretName = `/testenv-recycler-backend-${stage}/jwt-secret`;
 
 const serverlessConfiguration: Serverless | any = {
   service: {
     name: "testenv-recycler-backend",
   },
-  frameworkVersion: "1",
+  frameworkVersion: "2",
   custom: {
     webpack: {
       webpackConfig: "./webpack.config.js",
@@ -34,16 +35,19 @@ const serverlessConfiguration: Serverless | any = {
     environment: {
       AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1",
       RESERVATION_TABLE: reservationTableName,
-      CLIENT_TABLE: clientTableName,
-      ENVIRONMENT_TABLE: environmentTableName,
+      USER_TABLE: userTableName,
+      ACCOUNT_TABLE: accountTableName,
       PROCESS_TABLE: processTableName,
-      FULFILL_STATE_MACHINE_ARN:
-        "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:fulfillReservations",
-      CLEAN_STATE_MACHINE_ARN:
-        "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:cleanEnvironment",
+      FULFILL_RESERVATIONS_STATE_MACHINE_ARN:
+        "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:FulfillReservations",
+      CLEAN_ACCOUNT_STATE_MACHINE_ARN:
+        "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:CleanAccount",
+      JWT_SECRET_NAME: jwtSecretName,
+      EXECUTION_ROLE_ARN: { "Fn::GetAtt": ["ExecutionRole", "Arn"] },
     },
     iamRoleStatements: [
       {
+        Sid: "DynamoDB",
         Effect: "Allow",
         Action: [
           "dynamodb:BatchWriteItem",
@@ -55,22 +59,30 @@ const serverlessConfiguration: Serverless | any = {
         ],
         Resource: [
           `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${reservationTableName}`,
-          `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${clientTableName}`,
-          `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${environmentTableName}`,
+          `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${userTableName}`,
+          `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${accountTableName}`,
           `arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${processTableName}`,
         ],
       },
       {
+        Sid: "STS",
         Effect: "Allow",
         Action: ["sts:AssumeRole"],
         Resource: "*",
       },
       {
+        Sid: "SecretManager",
+        Effect: "Allow",
+        Action: ["secretsmanager:GetSecretValue"],
+        Resource: `arn:aws:secretsmanager:#{AWS::Region}:#{AWS::AccountId}:secret:/testenv-recycler-backend-${stage}/*`,
+      },
+      {
+        Sid: "StepFunctions",
         Effect: "Allow",
         Action: ["states:StartExecution"],
         Resource: [
-          "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:fulfillReservations",
-          "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:cleanEnvironment",
+          "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:FulfillReservations",
+          "arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:CleanAccount",
         ],
       },
     ],
@@ -128,6 +140,17 @@ const serverlessConfiguration: Serverless | any = {
         },
       ],
     },
+    login: {
+      handler: "handler.login",
+      events: [
+        {
+          http: {
+            method: "POST",
+            path: "login",
+          },
+        },
+      ],
+    },
     fulfillmentGetProcessStatus: {
       handler: "handler.fulfillmentGetProcessStatus",
       name: `recycler-${stage}-get-process-status`,
@@ -148,9 +171,9 @@ const serverlessConfiguration: Serverless | any = {
       handler: "handler.fulfillmentFulfillReservation",
       name: `recycler-${stage}-fulfill-reservation`,
     },
-    cleanGetEnvironment: {
-      handler: "handler.cleanGetEnvironment",
-      name: `recycler-${stage}-clean-get-environment`,
+    cleanGetAccount: {
+      handler: "handler.cleanGetAccount",
+      name: `recycler-${stage}-clean-get-account`,
     },
     cleanLoadResources: {
       handler: "handler.cleanLoadResources",
@@ -163,16 +186,16 @@ const serverlessConfiguration: Serverless | any = {
   },
   stepFunctions: {
     stateMachines: {
-      cleanEnvironment: {
-        name: "cleanEnvironment",
+      CleanAccount: {
+        name: "CleanAccount",
         definition: {
-          Comment: "Clean environment",
-          StartAt: "getEnvironment",
+          Comment: "Clean account",
+          StartAt: "getAccount",
           States: {
-            getEnvironment: {
+            getAccount: {
               Type: "Task",
               Resource: {
-                "Fn::GetAtt": ["cleanGetEnvironment", "Arn"],
+                "Fn::GetAtt": ["cleanGetAccount", "Arn"],
               },
               Next: "endOrLoadResources",
             },
@@ -180,7 +203,7 @@ const serverlessConfiguration: Serverless | any = {
               Type: "Choice",
               Choices: [
                 {
-                  Variable: "$.environmentStatus",
+                  Variable: "$.accountStatus",
                   StringEquals: "dirty",
                   Next: "loadResources",
                 },
@@ -218,8 +241,8 @@ const serverlessConfiguration: Serverless | any = {
           },
         },
       },
-      fulfillReservations: {
-        name: "fulfillReservations",
+      FulfillReservations: {
+        name: "FulfillReservations",
         definition: {
           Comment: "Fulfill reservations",
           StartAt: "getProcessStatus",
@@ -343,10 +366,27 @@ const serverlessConfiguration: Serverless | any = {
           ],
         },
       },
-      ClientTable: {
+      UserTable: {
         Type: "AWS::DynamoDB::Table",
         Properties: {
-          TableName: clientTableName,
+          TableName: userTableName,
+          ProvisionedThroughput: {
+            ReadCapacityUnits: 1,
+            WriteCapacityUnits: 1,
+          },
+          KeySchema: [{ AttributeName: "username", KeyType: "HASH" }],
+          AttributeDefinitions: [
+            {
+              AttributeName: "username",
+              AttributeType: "S",
+            },
+          ],
+        },
+      },
+      AccountTable: {
+        Type: "AWS::DynamoDB::Table",
+        Properties: {
+          TableName: accountTableName,
           ProvisionedThroughput: {
             ReadCapacityUnits: 1,
             WriteCapacityUnits: 1,
@@ -360,31 +400,7 @@ const serverlessConfiguration: Serverless | any = {
           ],
         },
       },
-      EnvironmentTable: {
-        Type: "AWS::DynamoDB::Table",
-        Properties: {
-          TableName: environmentTableName,
-          ProvisionedThroughput: {
-            ReadCapacityUnits: 1,
-            WriteCapacityUnits: 1,
-          },
-          KeySchema: [
-            { AttributeName: "id", KeyType: "HASH" },
-            { AttributeName: "type", KeyType: "RANGE" },
-          ],
-          AttributeDefinitions: [
-            {
-              AttributeName: "id",
-              AttributeType: "S",
-            },
-            {
-              AttributeName: "type",
-              AttributeType: "S",
-            },
-          ],
-        },
-      },
-      FulfillmentTable: {
+      ProcessTable: {
         Type: "AWS::DynamoDB::Table",
         Properties: {
           TableName: processTableName,
@@ -397,6 +413,49 @@ const serverlessConfiguration: Serverless | any = {
             {
               AttributeName: "id",
               AttributeType: "S",
+            },
+          ],
+        },
+      },
+      JwtSecret: {
+        Type: "AWS::SecretsManager::Secret",
+        Properties: {
+          Description: "JWT secret",
+          Name: jwtSecretName,
+          GenerateSecretString: {
+            PasswordLength: 32,
+            ExcludePunctuation: true,
+          },
+        },
+      },
+      ExecutionRole: {
+        Type: "AWS::IAM::Role",
+        Properties: {
+          AssumeRolePolicyDocument: {
+            Version: "2012-10-17",
+            Statement: [
+              {
+                Effect: "Allow",
+                Principal: {
+                  AWS: "#{AWS::AccountId}",
+                },
+                Action: ["sts:AssumeRole"],
+              },
+            ],
+          },
+          Policies: [
+            {
+              PolicyName: "ExecutionRolePolicy",
+              PolicyDocument: {
+                Version: "2012-10-17",
+                Statement: [
+                  {
+                    Effect: "Allow",
+                    Action: "sts:AssumeRole",
+                    Resource: "*",
+                  },
+                ],
+              },
             },
           ],
         },
