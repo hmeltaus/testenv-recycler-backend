@@ -65,36 +65,42 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
     );
 
   private cleanResourceInternal = async (
-    account: Account,
-    region: string,
-    resource: A
+    client: C,
+    resource: A,
+    region: string
   ): Promise<string> => {
-    const { id, status } = await this.cleanResource(account, region, resource);
+    console.log(
+      `About to clean resource of type '${
+        this.resourceType
+      }' from region ${region}:\n\n${JSON.stringify(resource)}`
+    );
+    const { id, status } = await this.cleanResource(client, resource);
     switch (status) {
       case "retry":
         await sleep(1000);
-        const refreshed = await this.refreshResource(account, region, resource);
-        return this.cleanResourceInternal(account, region, refreshed);
+        const refreshed = await this.refreshResource(client, resource);
+        return this.cleanResourceInternal(client, refreshed, region);
       case "success":
         return id;
       default:
         throw new Error(
-          `Unsupported result status '${status}' when cleaning resources of type ${this.resourceType} from region ${region}`
+          `Unsupported result status '${status}' when cleaning resource '${id}' of type ${this.resourceType}`
         );
     }
   };
 
   clean = async (account: Account): Promise<boolean> => {
     for (const region of this.regions) {
-      console.log(`About to clean region: ${region}`);
-      const resources = await this.getResourcesToClean(account, region);
+      console.log(`About to clean region ${region} of account ${account.id}`);
+      const client = await this.getClient(account, region);
+      const resources = await this.getResourcesToClean(client);
       console.log(
         `Found ${resources.length} resources of type ${this.resourceType} from region ${region}`
       );
 
       const ids = [];
       for (const resource of resources) {
-        const id = await this.cleanResourceInternal(account, region, resource);
+        const id = await this.cleanResourceInternal(client, resource, region);
         ids.push(id);
         console.log(
           `Cleaned resource ${id} of type ${this.resourceType} from region ${region}`
@@ -115,20 +121,16 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
     options: ConfigurationOptions
   ): C;
 
-  protected abstract async getResourcesToClean(
-    account: Account,
-    region: string
-  ): Promise<A[]>;
+  protected abstract async getResourcesToClean(client: C): Promise<A[]>;
 
   protected abstract async cleanResource(
-    account: Account,
-    region: string,
+    client: C,
     resource: A
   ): Promise<CleanResult>;
 
   protected refreshResource = async (
-    account: Account,
-    region: string,
+    // @ts-ignore
+    client: C,
     resource: A
   ): Promise<A | undefined> => resource;
 

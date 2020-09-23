@@ -1,7 +1,6 @@
 import { CloudWatchLogs, CredentialProviderChain, Credentials } from "aws-sdk";
 import { LogGroup } from "aws-sdk/clients/cloudwatchlogs";
 import { ConfigurationOptions } from "aws-sdk/lib/config-base";
-import { Account } from "../model";
 import { AwsCleaner, CleanResult } from "./aws-cleaner";
 
 export class LogGroupCleaner extends AwsCleaner<CloudWatchLogs, LogGroup> {
@@ -15,15 +14,12 @@ export class LogGroupCleaner extends AwsCleaner<CloudWatchLogs, LogGroup> {
   }
 
   protected getResourcesToClean = async (
-    account: Account,
-    region: string
+    client: CloudWatchLogs
   ): Promise<LogGroup[]> =>
-    this.withClient(account, region, (c) =>
-      this.pagedOperation(
-        (params) => c.describeLogGroups(params),
-        {},
-        (response) => response.logGroups!
-      )
+    this.pagedOperation(
+      (params) => client.describeLogGroups(params),
+      {},
+      (response) => response.logGroups!
     ).then((resources) =>
       resources.filter(
         (r) => !r.logGroupName.startsWith(this.excludeLogGroupsWithPrefix)
@@ -31,16 +27,13 @@ export class LogGroupCleaner extends AwsCleaner<CloudWatchLogs, LogGroup> {
     );
 
   protected cleanResource = async (
-    account: Account,
-    region: string,
+    client: CloudWatchLogs,
     resource: LogGroup
   ): Promise<CleanResult> =>
-    this.withClientPromise(
-      account,
-      region,
-      (c) => c.deleteLogGroup({ logGroupName: resource.logGroupName }),
-      () => ({ id: resource.logGroupName, status: "success" })
-    );
+    client
+      .deleteLogGroup({ logGroupName: resource.logGroupName })
+      .promise()
+      .then(() => ({ id: resource.logGroupName, status: "success" }));
 
   protected createClient = (
     credentials: Credentials,

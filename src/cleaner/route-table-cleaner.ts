@@ -1,7 +1,6 @@
 import { CredentialProviderChain, Credentials, EC2 } from "aws-sdk";
 import { RouteTable } from "aws-sdk/clients/ec2";
 import { ConfigurationOptions } from "aws-sdk/lib/config-base";
-import { Account } from "../model";
 import { AwsCleaner, CleanResult } from "./aws-cleaner";
 import { SubnetCleaner } from "./subnet-cleaner";
 
@@ -14,30 +13,21 @@ export class RouteTableCleaner extends AwsCleaner<EC2, RouteTable> {
     super(credentialProvider, regions);
   }
 
-  protected getResourcesToClean = async (
-    account: Account,
-    region: string
-  ): Promise<RouteTable[]> =>
-    this.withClient(account, region, (c) =>
-      this.pagedOperation(
-        (params) => c.describeRouteTables(params),
-        {},
-        (response) => response.RouteTables!
-      )
+  protected getResourcesToClean = async (client: EC2): Promise<RouteTable[]> =>
+    this.pagedOperation(
+      (params) => client.describeRouteTables(params),
+      {},
+      (response) => response.RouteTables!
     );
 
   protected cleanResource = async (
-    account: Account,
-    region: string,
+    client: EC2,
     resource: RouteTable
   ): Promise<CleanResult> =>
-    this.withClientPromise(
-      account,
-      region,
-      (client) =>
-        client.deleteRouteTable({ RouteTableId: resource.RouteTableId }),
-      () => ({ id: resource.RouteTableId, status: "success" })
-    );
+    client
+      .deleteRouteTable({ RouteTableId: resource.RouteTableId })
+      .promise()
+      .then(() => ({ id: resource.RouteTableId, status: "success" }));
   // {
   // const associated = resource.Associations.filter(
   //   (a) => a.AssociationState.State === "associated"
@@ -63,18 +53,18 @@ export class RouteTableCleaner extends AwsCleaner<EC2, RouteTable> {
   //     .then(() => ({ id: resource.RouteTableId, status: "success" }));
   // };
 
-  protected refreshResource = async (
-    account: Account,
-    region: string,
-    resource: RouteTable
-  ): Promise<RouteTable | undefined> =>
-    this.withClientPromise(
-      account,
-      region,
-      (c) => c.describeRouteTables({ RouteTableIds: [resource.RouteTableId] }),
-      (result) =>
-        result.RouteTables.length > 0 ? result.RouteTables[0] : undefined
-    );
+  // protected refreshResource = async (
+  //   account: Account,
+  //   region: string,
+  //   resource: RouteTable
+  // ): Promise<RouteTable | undefined> =>
+  //   this.withClientPromise(
+  //     account,
+  //     region,
+  //     (c) => c.describeRouteTables({ RouteTableIds: [resource.RouteTableId] }),
+  //     (result) =>
+  //       result.RouteTables.length > 0 ? result.RouteTables[0] : undefined
+  //   );
 
   protected createClient = (
     credentials: Credentials,
