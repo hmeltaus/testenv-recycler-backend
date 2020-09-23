@@ -182,6 +182,7 @@ const serverlessConfiguration: Serverless | any = {
     cleanCleanResource: {
       handler: "handler.cleanCleanResource",
       name: `recycler-${stage}-clean-clean-resource`,
+      timeout: 60,
     },
   },
   stepFunctions: {

@@ -2,10 +2,12 @@ import { CloudWatchLogs, CredentialProviderChain, Credentials } from "aws-sdk";
 import { LogGroup } from "aws-sdk/clients/cloudwatchlogs";
 import { ConfigurationOptions } from "aws-sdk/lib/config-base";
 import { Account } from "../model";
-import { AwsCleaner } from "./aws-cleaner";
+import { AwsCleaner, CleanResult } from "./aws-cleaner";
 
-export class LogGroupAwsCleaner extends AwsCleaner<CloudWatchLogs, LogGroup> {
-  readonly resourceType = "LogGroup";
+export class LogGroupCleaner extends AwsCleaner<CloudWatchLogs, LogGroup> {
+  static readonly resourceType = "LogGroup";
+  readonly resourceType = LogGroupCleaner.resourceType;
+  readonly depends = [];
   readonly excludeLogGroupsWithPrefix = "/aws/";
 
   constructor(credentialProvider: CredentialProviderChain, regions: string[]) {
@@ -32,15 +34,15 @@ export class LogGroupAwsCleaner extends AwsCleaner<CloudWatchLogs, LogGroup> {
     account: Account,
     region: string,
     resource: LogGroup
-  ): Promise<string> =>
+  ): Promise<CleanResult> =>
     this.withClientPromise(
       account,
       region,
       (c) => c.deleteLogGroup({ logGroupName: resource.logGroupName }),
-      () => resource.logGroupName
+      () => ({ id: resource.logGroupName, status: "success" })
     );
 
-  protected getClient = (
+  protected createClient = (
     credentials: Credentials,
     region: string,
     options: ConfigurationOptions

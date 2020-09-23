@@ -19,6 +19,7 @@ import { AccountSlot, Reservation } from "./model";
 
 export interface CreateReservationBody {
   count?: number;
+  name?: string;
 }
 
 const sf = new StepFunctions({ region: process.env.AWS_REGION });
@@ -42,10 +43,14 @@ const createAccountSlots = (count: number): AccountSlot[] => {
 };
 
 export const create: APIGatewayProxyHandler = async (event, _context) => {
-  const { count } = parseCreateReservationBody(event.body);
+  const { count, name } = parseCreateReservationBody(event.body);
 
   if (!count) {
     throw new Error(`count is required`);
+  }
+
+  if (!name) {
+    throw new Error(`name is required`);
   }
 
   const id = uuidv4();
@@ -57,6 +62,7 @@ export const create: APIGatewayProxyHandler = async (event, _context) => {
 
   const reservation: Reservation = {
     id,
+    name,
     created,
     expires,
     status,

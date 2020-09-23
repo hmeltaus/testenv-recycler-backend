@@ -8,10 +8,12 @@ import {
 import { ConfigurationOptions } from "aws-sdk/lib/config-base";
 import * as https from "https";
 import { Account } from "../model";
+import { sleep } from "../util";
 import { Cleaner } from "./cleaner";
 
 export interface PagedResponse {
   readonly nextToken?: string;
+  readonly NextToken?: string;
 }
 
 const maxRetries = 30;
@@ -27,9 +29,14 @@ export const randomInt = (min: number, max: number): number => {
   return Math.floor(Math.random() * (maxF - minC + 1) + minC);
 };
 
+export interface CleanResult {
+  id: string;
+  status: "success" | "retry" | "error";
+}
+
 export abstract class AwsCleaner<C, A> implements Cleaner {
-  readonly depends: string[] = [];
   abstract readonly resourceType: string;
+  abstract readonly depends: string[];
 
   protected constructor(
     readonly credentialProvider: CredentialProviderChain,
@@ -57,23 +64,42 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
         ])
     );
 
+  private cleanResourceInternal = async (
+    account: Account,
+    region: string,
+    resource: A
+  ): Promise<string> => {
+    const { id, status } = await this.cleanResource(account, region, resource);
+    switch (status) {
+      case "retry":
+        await sleep(1000);
+        const refreshed = await this.refreshResource(account, region, resource);
+        return this.cleanResourceInternal(account, region, refreshed);
+      case "success":
+        return id;
+      default:
+        throw new Error(
+          `Unsupported result status '${status}' when cleaning resources of type ${this.resourceType} from region ${region}`
+        );
+    }
+  };
+
   clean = async (account: Account): Promise<boolean> => {
-    for (let region of this.regions) {
+    for (const region of this.regions) {
       console.log(`About to clean region: ${region}`);
       const resources = await this.getResourcesToClean(account, region);
       console.log(
         `Found ${resources.length} resources of type ${this.resourceType} from region ${region}`
       );
-      const ids = await Promise.all(
-        resources
-          .map((r) => this.cleanResource(account, region, r))
-          .map((id) => {
-            console.log(
-              `Cleaned resource ${id} of type ${this.resourceType} from region ${region}`
-            );
-            return id;
-          })
-      );
+
+      const ids = [];
+      for (const resource of resources) {
+        const id = await this.cleanResourceInternal(account, region, resource);
+        ids.push(id);
+        console.log(
+          `Cleaned resource ${id} of type ${this.resourceType} from region ${region}`
+        );
+      }
 
       console.log(
         `Cleaned ${ids.length} resources of type ${this.resourceType} from region ${region}`
@@ -83,22 +109,28 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
     return true;
   };
 
-  protected abstract getClient(
+  protected abstract createClient(
     credentials: Credentials,
     region: string,
     options: ConfigurationOptions
   ): C;
 
-  protected abstract getResourcesToClean(
+  protected abstract async getResourcesToClean(
     account: Account,
     region: string
   ): Promise<A[]>;
 
-  protected abstract cleanResource(
+  protected abstract async cleanResource(
     account: Account,
     region: string,
     resource: A
-  ): Promise<string>;
+  ): Promise<CleanResult>;
+
+  protected refreshResource = async (
+    account: Account,
+    region: string,
+    resource: A
+  ): Promise<A | undefined> => resource;
 
   protected clientOptions = (): ConfigurationOptions => {
     const agent = new https.Agent({
@@ -153,6 +185,11 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
     return this.getCredentials();
   };
 
+  protected getClient = async (account: Account, region: string): Promise<C> =>
+    this.getCredentialsForAccount(account).then((credentials) =>
+      this.createClient(credentials, region, this.clientOptions())
+    );
+
   protected withClient = async <T>(
     account: Account,
     region: string,
@@ -160,7 +197,7 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
   ): Promise<T> =>
     this.getCredentialsForAccount(account)
       .then((credentials) =>
-        this.getClient(credentials, region, this.clientOptions())
+        this.createClient(credentials, region, this.clientOptions())
       )
       .then(fn);
 
@@ -173,7 +210,7 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
   ): Promise<T> =>
     this.getCredentialsForAccount(account)
       .then((credentials) =>
-        this.getClient(credentials, region, this.clientOptions())
+        this.createClient(credentials, region, this.clientOptions())
       )
       .then((client) => fn(client).promise())
       .then(onSuccess)
@@ -188,26 +225,34 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
     operation: (params: P) => Request<R, AWSError>,
     params: P,
     extractor: (response: R) => T[] | undefined,
-    nextToken?: string
+    previousResponse?: PagedResponse
   ): Promise<T[]> => {
-    const response = await operation({
-      ...params,
-      nextToken,
-    }).promise();
+    const nextTokenName =
+      previousResponse && previousResponse.NextToken
+        ? "NextToken"
+        : "nextToken";
+
+    const nextTokenValue = previousResponse
+      ? previousResponse[nextTokenName]
+      : undefined;
+
+    const newParams = nextTokenValue
+      ? {
+          ...params,
+          [nextTokenName]: nextTokenValue,
+        }
+      : params;
+
+    const response = await operation(newParams).promise();
 
     const items = extractor(response) || [];
-    if (!response.nextToken) {
+    if (!response.nextToken && !response.NextToken) {
       return items;
     }
 
     return [
       ...items,
-      ...(await this.pagedOperation(
-        operation,
-        params,
-        extractor,
-        response.nextToken
-      )),
+      ...(await this.pagedOperation(operation, params, extractor, response)),
     ];
   };
 }

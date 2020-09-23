@@ -5,6 +5,7 @@ import { dynamo } from "./common";
 
 export interface ReservationDBItem {
   id: string;
+  name: string;
   slot: string;
   created: number;
   expires: number;
@@ -22,15 +23,16 @@ export type ReservationTableItem = ReservationDBItem | AccountSlotDBItem;
 
 const convertToReservationDbItem = ({
   id,
+  name,
   status,
   created,
   expires,
 }: Reservation): ReservationDBItem => ({
   id,
+  name,
   status,
   created,
   expires,
-
   slot: "reservation",
 });
 
@@ -98,6 +100,7 @@ export const getReservationFromDB = async (
 
       return {
         id: reservation.id,
+        name: reservation.name,
         status: reservation.status,
         created: reservation.created,
         expires: reservation.expires,
@@ -198,6 +201,7 @@ export const listReservationsFromDB = async (
 
       reservations.push({
         id: reservation.id,
+        name: reservation.name,
         status: reservation.status,
         created: parseInt(reservation.created, 10),
         expires: parseInt(reservation.expires, 10),

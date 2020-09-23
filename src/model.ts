@@ -12,6 +12,7 @@ export interface ReservationCredentials {
 
 export interface Reservation {
   id: string;
+  name: string;
   created: number;
   expires: number;
   status: "pending" | "ready" | "failed" | "expired" | string;
