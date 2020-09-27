@@ -6,7 +6,12 @@ import { IgwCleaner } from "./igw-cleaner";
 import { LogGroupCleaner } from "./log-group-cleaner";
 import { NetworkAclCleaner } from "./network-acl-cleaner";
 import { RouteTableCleaner } from "./route-table-cleaner";
+import { SecurityGroupCleaner } from "./security-group-cleaner";
+import { SnsTopicCleaner } from "./sns-topic-cleaner";
+import { SqsQueueCleaner } from "./sqs-queue-cleaner";
+import { SsmParameterCleaner } from "./ssm-parameter-cleaner";
 import { SubnetCleaner } from "./subnet-cleaner";
+import { UserCleaner } from "./user-cleaner";
 import { VpcCleaner } from "./vpc-cleaner";
 
 interface CleanerItem {
@@ -133,7 +138,7 @@ const sortCleaners = (cleaners: Cleaner[]): Cleaner[] => {
 };
 
 export class CleanerRegistry {
-  readonly regions = ["eu-west-1", "eu-central-1"];
+  readonly regions = ["eu-west-1", "eu-central-1", "eu-north-1"];
   readonly credentialProvider: CredentialProviderChain = new CredentialProviderChain();
   readonly cleaners: AwsCleaner<any, any>[];
 
@@ -146,6 +151,11 @@ export class CleanerRegistry {
       new SubnetCleaner(this.credentialProvider, this.regions),
       new NetworkAclCleaner(this.credentialProvider, this.regions),
       new RouteTableCleaner(this.credentialProvider, this.regions),
+      new SecurityGroupCleaner(this.credentialProvider, this.regions),
+      new UserCleaner(this.credentialProvider, this.regions),
+      new SqsQueueCleaner(this.credentialProvider, this.regions),
+      new SnsTopicCleaner(this.credentialProvider, this.regions),
+      new SsmParameterCleaner(this.credentialProvider, this.regions),
     ];
   }
 

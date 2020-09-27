@@ -87,8 +87,9 @@ export const setAccountAsReservedInDB = async (
     .then(() => true);
 };
 
-const listReadyAccountsByWithPagingFromDB = async (
+const listAccountsByStatusWithPagingFromDB = async (
   collected: any[],
+  status: string,
   startKey?: Key
 ): Promise<any[]> =>
   dynamo
@@ -97,7 +98,7 @@ const listReadyAccountsByWithPagingFromDB = async (
       ExclusiveStartKey: startKey,
       ScanFilter: {
         status: {
-          AttributeValueList: ["ready"],
+          AttributeValueList: [status],
           ComparisonOperator: "EQ",
         },
       },
@@ -108,14 +109,25 @@ const listReadyAccountsByWithPagingFromDB = async (
         return [...collected, ...Items];
       }
 
-      return listReadyAccountsByWithPagingFromDB(
+      return listAccountsByStatusWithPagingFromDB(
         [...collected, ...Items],
+        status,
         LastEvaluatedKey
       );
     });
 
 export const listReadyAccountsFromDB = async (): Promise<Account[]> =>
-  listReadyAccountsByWithPagingFromDB([]).then((collected) =>
+  listAccountsByStatusWithPagingFromDB([], "ready").then((collected) =>
+    collected.map((item) => ({
+      id: item.id,
+      status: item.status,
+      reservationId: item.reservationId || null,
+      managementRoleArn: item.managementRoleArn,
+    }))
+  );
+
+export const listReservedAccountsFromDB = async (): Promise<Account[]> =>
+  listAccountsByStatusWithPagingFromDB([], "reserved").then((collected) =>
     collected.map((item) => ({
       id: item.id,
       status: item.status,

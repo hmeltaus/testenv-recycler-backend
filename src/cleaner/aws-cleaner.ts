@@ -14,6 +14,7 @@ import { Cleaner } from "./cleaner";
 export interface PagedResponse {
   readonly nextToken?: string;
   readonly NextToken?: string;
+  readonly Marker?: string;
 }
 
 const maxRetries = 30;
@@ -223,16 +224,33 @@ export abstract class AwsCleaner<C, A> implements Cleaner {
         throw e;
       });
 
+  private getNextTokenName = (previous?: PagedResponse): string | undefined => {
+    if (!previous) {
+      return undefined;
+    }
+
+    if (previous.NextToken) {
+      return "NextToken";
+    }
+
+    if (previous.nextToken) {
+      return "nextToken";
+    }
+
+    if (previous.Marker) {
+      return "Marker";
+    }
+
+    throw new Error("Could not resolve next token name");
+  };
+
   protected pagedOperation = async <T, P, R extends PagedResponse>(
     operation: (params: P) => Request<R, AWSError>,
     params: P,
     extractor: (response: R) => T[] | undefined,
     previousResponse?: PagedResponse
   ): Promise<T[]> => {
-    const nextTokenName =
-      previousResponse && previousResponse.NextToken
-        ? "NextToken"
-        : "nextToken";
+    const nextTokenName = this.getNextTokenName(previousResponse);
 
     const nextTokenValue = previousResponse
       ? previousResponse[nextTokenName]
