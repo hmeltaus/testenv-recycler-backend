@@ -1,39 +1,45 @@
 import { PROCESS_TABLE } from "../config";
-import { Process } from "../model";
 import { dynamo } from "./common";
 
-export const getProcessFromDB = (id: string): Promise<Process | null> =>
-  dynamo
-    .get({
-      TableName: PROCESS_TABLE,
-      Key: { id },
-    })
-    .promise()
-    .then(({ Item }) => {
-      if (!Item) {
-        return null;
-      }
+const ID = "fulfillment";
 
-      return {
-        id: Item.id,
-        running: Item.running,
-        started: Item.started || null,
-      };
-    });
-
-export const persistProcessToDB = async ({
-  id,
-  running,
-  started,
-}: Process): Promise<boolean> =>
-  dynamo
-    .put({
+export const lockProcessInDB = async (lock: string): Promise<boolean> => {
+  console.log(`Attempt to lock process using lock '${lock}'`);
+  return dynamo
+    .update({
       TableName: PROCESS_TABLE,
-      Item: {
-        id,
-        running,
-        started: started || undefined,
+      Key: { id: ID },
+      UpdateExpression: "SET #lock = :lock, started = :started",
+      ConditionExpression: "attribute_not_exists(#lock)",
+      ExpressionAttributeValues: {
+        ":lock": lock,
+        ":started": Date.now(),
       },
+      ExpressionAttributeNames: {
+        "#lock": "lock",
+      },
+      ReturnValues: "ALL_NEW",
     })
     .promise()
-    .then(() => true);
+    .then((res) => res.Attributes.lock === lock);
+};
+
+export const releaseProcessInDB = async (lock: string): Promise<boolean> => {
+  console.log(`Release process locked by ${lock}`);
+  return dynamo
+    .update({
+      TableName: PROCESS_TABLE,
+      Key: { id: ID },
+      UpdateExpression: "REMOVE #lock, started",
+      ConditionExpression: "#lock = :lock",
+      ExpressionAttributeValues: {
+        ":lock": lock,
+      },
+      ExpressionAttributeNames: {
+        "#lock": "lock",
+      },
+      ReturnValues: "ALL_NEW",
+    })
+    .promise()
+    .then((res) => res.Attributes.lock === undefined);
+};

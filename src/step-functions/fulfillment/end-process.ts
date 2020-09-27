@@ -1,23 +1,23 @@
 import { Handler } from "aws-lambda";
-import { persistProcessToDB } from "../../db/process";
+import { releaseProcessInDB } from "../../db/process";
 
-interface EndProcessOutput {
-  status: boolean;
+interface EndProcessInput {
+  lock: string;
 }
 
-export const endProcess: Handler<any, EndProcessOutput> = async (
-  _event,
+interface EndProcessOutput {
+  lock: string;
+}
+
+export const endProcess: Handler<EndProcessInput, EndProcessOutput> = async (
+  { lock },
   _context
 ) => {
-  console.log("End process");
+  console.log(`End process with lock ${lock}`);
 
-  await persistProcessToDB({
-    id: "fulfillment",
-    running: false,
-    started: null,
-  });
+  await releaseProcessInDB(lock);
 
   return {
-    status: true,
+    lock,
   };
 };

@@ -15,16 +15,18 @@ const MAX_RESERVATION_AGE = 1000 * 60 * 60; // 1 hour
 
 interface FulfillReservationOutput {
   ready: boolean;
+  lock: string;
 }
 
 interface FulfillReservationInput {
   reservation: Reservation;
+  lock: string;
 }
 
 export const fulfillReservation: Handler<
   FulfillReservationInput,
   FulfillReservationOutput
-> = async ({ reservation }: FulfillReservationInput, _context) => {
+> = async ({ reservation, lock }: FulfillReservationInput, _context) => {
   const now = Date.now();
   if (
     now > reservation.expires ||
@@ -39,6 +41,7 @@ export const fulfillReservation: Handler<
     );
 
     return {
+      lock,
       ready: true,
     };
   }
@@ -53,6 +56,7 @@ export const fulfillReservation: Handler<
   if (pendingSlots.length === 0) {
     await setReservationAsReadyInDB(reservation.id);
     return {
+      lock,
       ready: true,
     };
   }
@@ -62,6 +66,7 @@ export const fulfillReservation: Handler<
 
   if (readyEnvironments.length === 0) {
     return {
+      lock,
       ready: false,
     };
   }
@@ -83,12 +88,14 @@ export const fulfillReservation: Handler<
     console.log(`Reservation ${reservation.id} is now ready`);
     await setReservationAsReadyInDB(reservation.id);
     return {
+      lock,
       ready: true,
     };
   }
 
   console.log(`Reservation ${reservation.id} was not fulfilled`);
   return {
+    lock,
     ready: false,
   };
 };

@@ -37,6 +37,6 @@ export interface Account {
 
 export interface Process {
   id: string;
-  running: boolean;
+  lock: string | null;
   started: number | null;
 }

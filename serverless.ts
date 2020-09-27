@@ -26,6 +26,7 @@ const serverlessConfiguration: Serverless | any = {
   provider: {
     stage,
     name: "aws",
+    memorySize: 128,
     runtime: "nodejs12.x",
     region: "eu-west-1",
     versionFunctions: false,
@@ -159,10 +160,6 @@ const serverlessConfiguration: Serverless | any = {
         },
       ],
     },
-    fulfillmentGetProcessStatus: {
-      handler: "handler.fulfillmentGetProcessStatus",
-      name: `recycler-${stage}-get-process-status`,
-    },
     fulfillmentGetOldestPendingReservation: {
       handler: "handler.fulfillmentGetOldestPendingReservation",
       name: `recycler-${stage}-get-oldest-pending-reservation`,
@@ -171,13 +168,13 @@ const serverlessConfiguration: Serverless | any = {
       handler: "handler.fulfillmentEndProcess",
       name: `recycler-${stage}-end-process`,
     },
-    fulfillmentStartProcess: {
-      handler: "handler.fulfillmentStartProcess",
-      name: `recycler-${stage}-start-process`,
-    },
     fulfillmentFulfillReservation: {
       handler: "handler.fulfillmentFulfillReservation",
       name: `recycler-${stage}-fulfill-reservation`,
+    },
+    fulfillmentLockProcess: {
+      handler: "handler.fulfillmentLockProcess",
+      name: `recycler-${stage}-lock-process`,
     },
     cleanGetAccount: {
       handler: "handler.cleanGetAccount",
@@ -254,12 +251,12 @@ const serverlessConfiguration: Serverless | any = {
         name: "FulfillReservations",
         definition: {
           Comment: "Fulfill reservations",
-          StartAt: "getProcessStatus",
+          StartAt: "lockProcess",
           States: {
-            getProcessStatus: {
+            lockProcess: {
               Type: "Task",
               Resource: {
-                "Fn::GetAtt": ["fulfillmentGetProcessStatus", "Arn"],
+                "Fn::GetAtt": ["fulfillmentLockProcess", "Arn"],
               },
               Next: "startOrCancelProcess",
             },
@@ -267,22 +264,15 @@ const serverlessConfiguration: Serverless | any = {
               Type: "Choice",
               Choices: [
                 {
-                  Variable: "$.running",
-                  BooleanEquals: false,
-                  Next: "startProcess",
+                  Variable: "$.lock",
+                  IsPresent: true,
+                  Next: "getOldestPendingReservation",
                 },
               ],
               Default: "cancelProcess",
             },
             cancelProcess: {
               Type: "Succeed",
-            },
-            startProcess: {
-              Type: "Task",
-              Resource: {
-                "Fn::GetAtt": ["fulfillmentStartProcess", "Arn"],
-              },
-              Next: "getOldestPendingReservation",
             },
             getOldestPendingReservation: {
               Type: "Task",
