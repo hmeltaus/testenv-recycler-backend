@@ -19,6 +19,12 @@ export class SecurityGroupCleaner extends AwsCleaner<EC2, SecurityGroup> {
       (params) => client.describeSecurityGroups(params),
       {},
       (response) => response.SecurityGroups!
+    ).then((resources) =>
+      resources.filter(
+        (r) =>
+          r.GroupName !== "default" &&
+          r.Description !== "default VPC security group"
+      )
     );
 
   protected cleanResource = async (

@@ -18,10 +18,11 @@ export const lockProcessInDB = async (lock: string): Promise<boolean> => {
       ExpressionAttributeNames: {
         "#lock": "lock",
       },
-      ReturnValues: "ALL_NEW",
+      ReturnValues: "NONE",
     })
     .promise()
-    .then((res) => res.Attributes.lock === lock);
+    .then(() => true)
+    .catch(() => false);
 };
 
 export const releaseProcessInDB = async (lock: string): Promise<boolean> => {
@@ -38,8 +39,9 @@ export const releaseProcessInDB = async (lock: string): Promise<boolean> => {
       ExpressionAttributeNames: {
         "#lock": "lock",
       },
-      ReturnValues: "ALL_NEW",
+      ReturnValues: "NONE",
     })
     .promise()
-    .then((res) => res.Attributes.lock === undefined);
+    .then(() => true)
+    .catch(() => false);
 };
