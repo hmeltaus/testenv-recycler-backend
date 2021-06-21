@@ -6,6 +6,7 @@ import { IgwCleaner } from "./igw-cleaner";
 import { LogGroupCleaner } from "./log-group-cleaner";
 import { NetworkAclCleaner } from "./network-acl-cleaner";
 import { RouteTableCleaner } from "./route-table-cleaner";
+import { S3BucketCleaner } from "./s3-bucket-cleaner";
 import { SecurityGroupCleaner } from "./security-group-cleaner";
 import { SnsTopicCleaner } from "./sns-topic-cleaner";
 import { SqsQueueCleaner } from "./sqs-queue-cleaner";
@@ -144,6 +145,7 @@ export class CleanerRegistry {
 
   constructor() {
     this.cleaners = [
+      new S3BucketCleaner(this.credentialProvider, this.regions),
       new LogGroupCleaner(this.credentialProvider, this.regions),
       new VpcCleaner(this.credentialProvider, this.regions),
       new CloudFormationStackCleaner(this.credentialProvider, this.regions),
