@@ -6,6 +6,7 @@ import { IgwCleaner } from "./igw-cleaner";
 import { LogGroupCleaner } from "./log-group-cleaner";
 import { NetworkAclCleaner } from "./network-acl-cleaner";
 import { RouteTableCleaner } from "./route-table-cleaner";
+import { S3BucketCleaner } from "./s3-bucket-cleaner";
 import { SubnetCleaner } from "./subnet-cleaner";
 import { VpcCleaner } from "./vpc-cleaner";
 
@@ -22,6 +23,7 @@ export class CloudFormationStackCleaner extends AwsCleaner<
     NetworkAclCleaner.resourceType,
     SubnetCleaner.resourceType,
     RouteTableCleaner.resourceType,
+    S3BucketCleaner.resourceType,
   ];
 
   constructor(credentialProvider: CredentialProviderChain, regions: string[]) {
