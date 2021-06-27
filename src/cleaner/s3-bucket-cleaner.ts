@@ -18,11 +18,18 @@ export class S3BucketCleaner extends AwsCleaner<S3, Bucket> {
       .promise()
       .then((response) => response.Buckets)
       .then(async (buckets) => {
+        console.log(`Found ${buckets.length}`);
+        buckets.forEach((b) => console.log(b.Name));
+
         const bucketsWithData = await Promise.all(
           buckets.map(async (bucket) => {
-            const location = await client.getBucketLocation({
-              Bucket: bucket.Name,
-            });
+            const { LocationConstraint: location } = await client
+              .getBucketLocation({
+                Bucket: bucket.Name,
+              })
+              .promise();
+
+            console.log(`Bucket '${bucket.Name}' location: ${location}`);
 
             const bucketRegion = location ?? "us-east-1";
             if (bucketRegion !== client.config.region) {
@@ -35,6 +42,11 @@ export class S3BucketCleaner extends AwsCleaner<S3, Bucket> {
             const tagSet = await client
               .getBucketTagging({ Bucket: bucket.Name })
               .promise();
+
+            console.log(
+              `Bucket '${bucket.Name}' tagging:`,
+              JSON.stringify(tagSet, undefined, 2)
+            );
 
             const include = tagSet.TagSet.some(
               (t) => t.Key === "test-resource" && t.Value === "true"
