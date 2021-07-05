@@ -28,13 +28,15 @@ export const cleanReservations: Handler<any, any> = async (
         .filter((slot) => slot.accountId !== null)
         .map((slot) => {
           return setAccountAsDirtyInDB(slot.accountId).then(() =>
-            sf.startExecution({
-              stateMachineArn: CLEAN_ACCOUNT_STATE_MACHINE_ARN,
-              name: uuidv4(),
-              input: JSON.stringify({
-                id: slot.accountId,
-              }),
-            })
+            sf
+              .startExecution({
+                stateMachineArn: CLEAN_ACCOUNT_STATE_MACHINE_ARN,
+                name: uuidv4(),
+                input: JSON.stringify({
+                  id: slot.accountId,
+                }),
+              })
+              .promise()
           );
         })
     );

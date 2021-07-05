@@ -8,7 +8,7 @@ import {
   EXECUTION_ROLE_ARN,
   FULFILL_RESERVATIONS_STATE_MACHINE_ARN,
 } from "./config";
-import { setAccountAsDirtyInDB } from "./db/account";
+import { listDirtyAccountsFromDB, setAccountAsDirtyInDB } from "./db/account";
 import {
   getReservationFromDB,
   persistReservationToDB,
@@ -227,4 +227,42 @@ export const login: APIGatewayProxyHandler = async (event, _context) => {
       })
     ),
   };
+};
+
+export const cleanAllDirtyAccounts: APIGatewayProxyHandler = async (
+  _event,
+  _context
+) => {
+  const sf = new StepFunctions({ region: process.env.AWS_REGION });
+
+  try {
+    const accounts = await listDirtyAccountsFromDB();
+    console.log(`Found ${accounts.length} dirty accounts`);
+    for (const account of accounts) {
+      console.log(
+        `Start state machine ${CLEAN_ACCOUNT_STATE_MACHINE_ARN} for account ${account.id}`
+      );
+      await sf
+        .startExecution({
+          stateMachineArn: CLEAN_ACCOUNT_STATE_MACHINE_ARN,
+          name: uuidv4(),
+          input: JSON.stringify({
+            id: account.id,
+          }),
+        })
+        .promise();
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({}),
+    };
+  } catch (e) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: e.message,
+      }),
+    };
+  }
 };

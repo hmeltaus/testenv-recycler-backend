@@ -135,3 +135,13 @@ export const listReservedAccountsFromDB = async (): Promise<Account[]> =>
       managementRoleArn: item.managementRoleArn,
     }))
   );
+
+export const listDirtyAccountsFromDB = async (): Promise<Account[]> =>
+  listAccountsByStatusWithPagingFromDB([], "dirty").then((collected) =>
+    collected.map((item) => ({
+      id: item.id,
+      status: item.status,
+      reservationId: item.reservationId || null,
+      managementRoleArn: item.managementRoleArn,
+    }))
+  );

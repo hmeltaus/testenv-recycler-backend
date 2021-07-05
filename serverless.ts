@@ -96,6 +96,10 @@ const serverlessConfiguration: Serverless | any = {
       handler: "handler.scheduledCleanReservations",
       events: [{ schedule: "rate(5 minutes)" }],
     },
+    expireReservations: {
+      handler: "handler.scheduledExpireReservations",
+      events: [{ schedule: "rate(5 minutes)" }],
+    },
     fulfillReservations: {
       handler: "handler.scheduledFulfillReservations",
       events: [{ schedule: "rate(5 minutes)" }],
@@ -111,6 +115,21 @@ const serverlessConfiguration: Serverless | any = {
           http: {
             method: "post",
             path: "reservations",
+            authorizer: {
+              name: "authorizer",
+              resultTtlInSeconds: 0,
+            },
+          },
+        },
+      ],
+    },
+    cleanAllDirtyAccounts: {
+      handler: "handler.cleanAllDirtyAccounts",
+      events: [
+        {
+          http: {
+            method: "post",
+            path: "accounts/clean-all-dirty",
             authorizer: {
               name: "authorizer",
               resultTtlInSeconds: 0,
