@@ -151,6 +151,7 @@ const listReservationsWithPagingFromDB = async (
   dynamo
     .scan({
       TableName: RESERVATION_TABLE,
+      ConsistentRead: true,
       ExclusiveStartKey: startKey,
       ScanFilter: {
         status: {

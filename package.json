@@ -4,6 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
+    "array-unsort": "1.1.6",
     "aws-sdk": "2.756.0",
     "bcryptjs": "2.4.3",
     "jwt-simple": "^0.5.6",

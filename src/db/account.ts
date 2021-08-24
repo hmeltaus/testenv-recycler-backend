@@ -1,3 +1,4 @@
+import { unsort } from "array-unsort";
 import { Key } from "aws-sdk/clients/dynamodb";
 import { ACCOUNT_TABLE } from "../config";
 import { Account } from "../model";
@@ -8,6 +9,7 @@ export const getAccountFromDB = (id: string): Promise<Account | null> =>
     .get({
       TableName: ACCOUNT_TABLE,
       Key: { id },
+      ConsistentRead: true,
     })
     .promise()
     .then(({ Item }) => {
@@ -96,6 +98,7 @@ const listAccountsByStatusWithPagingFromDB = async (
     .scan({
       TableName: ACCOUNT_TABLE,
       ExclusiveStartKey: startKey,
+      ConsistentRead: true,
       ScanFilter: {
         status: {
           AttributeValueList: [status],
@@ -117,14 +120,16 @@ const listAccountsByStatusWithPagingFromDB = async (
     });
 
 export const listReadyAccountsFromDB = async (): Promise<Account[]> =>
-  listAccountsByStatusWithPagingFromDB([], "ready").then((collected) =>
-    collected.map((item) => ({
-      id: item.id,
-      status: item.status,
-      reservationId: item.reservationId || null,
-      managementRoleArn: item.managementRoleArn,
-    }))
-  );
+  listAccountsByStatusWithPagingFromDB([], "ready")
+    .then((collected) =>
+      collected.map((item) => ({
+        id: item.id,
+        status: item.status,
+        reservationId: item.reservationId || null,
+        managementRoleArn: item.managementRoleArn,
+      }))
+    )
+    .then((accounts) => unsort(accounts));
 
 export const listReservedAccountsFromDB = async (): Promise<Account[]> =>
   listAccountsByStatusWithPagingFromDB([], "reserved").then((collected) =>

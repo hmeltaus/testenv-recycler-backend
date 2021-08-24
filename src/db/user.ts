@@ -5,6 +5,7 @@ import { dynamo } from "./common";
 export const getUserFromDB = (username: string): Promise<User | null> =>
   dynamo
     .get({
+      ConsistentRead: true,
       TableName: USER_TABLE,
       Key: { username },
     })

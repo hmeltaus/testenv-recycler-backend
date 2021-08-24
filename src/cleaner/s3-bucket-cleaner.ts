@@ -27,7 +27,18 @@ export class S3BucketCleaner extends AwsCleaner<S3, Bucket> {
               .getBucketLocation({
                 Bucket: bucket.Name,
               })
-              .promise();
+              .promise()
+              .catch((e) => {
+                console.log("Error when getting bucket", e);
+                return { LocationConstraint: undefined };
+              });
+
+            if (!location) {
+              return {
+                bucket,
+                include: false,
+              };
+            }
 
             console.log(`Bucket '${bucket.Name}' location: ${location}`);
 
