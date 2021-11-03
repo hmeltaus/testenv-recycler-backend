@@ -2,6 +2,7 @@ import { CredentialProviderChain } from "aws-sdk";
 import { AwsCleaner } from "./aws-cleaner";
 import { Cleaner } from "./cleaner";
 import { CloudFormationStackCleaner } from "./cloud-formation-stack-cleaner";
+import { IamRoleCleaner } from "./iam-role-cleaner";
 import { IgwCleaner } from "./igw-cleaner";
 import { LogGroupCleaner } from "./log-group-cleaner";
 import { NetworkAclCleaner } from "./network-acl-cleaner";
@@ -158,6 +159,7 @@ export class CleanerRegistry {
       new SqsQueueCleaner(this.credentialProvider, this.regions),
       new SnsTopicCleaner(this.credentialProvider, this.regions),
       new SsmParameterCleaner(this.credentialProvider, this.regions),
+      new IamRoleCleaner(this.credentialProvider, this.regions),
     ];
   }
 
