@@ -8,6 +8,7 @@ import { LogGroupCleaner } from "./log-group-cleaner";
 import { NetworkAclCleaner } from "./network-acl-cleaner";
 import { RouteTableCleaner } from "./route-table-cleaner";
 import { S3BucketCleaner } from "./s3-bucket-cleaner";
+import { SecretCleaner } from "./secret-cleaner";
 import { SecurityGroupCleaner } from "./security-group-cleaner";
 import { SnsTopicCleaner } from "./sns-topic-cleaner";
 import { SqsQueueCleaner } from "./sqs-queue-cleaner";
@@ -160,6 +161,7 @@ export class CleanerRegistry {
       new SnsTopicCleaner(this.credentialProvider, this.regions),
       new SsmParameterCleaner(this.credentialProvider, this.regions),
       new IamRoleCleaner(this.credentialProvider, this.regions),
+      new SecretCleaner(this.credentialProvider, this.regions),
     ];
   }
 

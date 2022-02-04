@@ -8,6 +8,7 @@ import { LogGroupCleaner } from "./log-group-cleaner";
 import { NetworkAclCleaner } from "./network-acl-cleaner";
 import { RouteTableCleaner } from "./route-table-cleaner";
 import { S3BucketCleaner } from "./s3-bucket-cleaner";
+import { SecretCleaner } from "./secret-cleaner";
 import { SubnetCleaner } from "./subnet-cleaner";
 import { VpcCleaner } from "./vpc-cleaner";
 
@@ -26,6 +27,7 @@ export class CloudFormationStackCleaner extends AwsCleaner<
     RouteTableCleaner.resourceType,
     S3BucketCleaner.resourceType,
     IamRoleCleaner.resourceType,
+    SecretCleaner.resourceType,
   ];
 
   constructor(credentialProvider: CredentialProviderChain, regions: string[]) {
@@ -55,6 +57,7 @@ export class CloudFormationStackCleaner extends AwsCleaner<
         client
           .deleteStack({ StackName: resource.StackId })
           .promise()
+          .then(() => client.waitFor("stackDeleteComplete").promise())
           .then(() => ({ id: resource.StackId, status: "success" }))
       );
 

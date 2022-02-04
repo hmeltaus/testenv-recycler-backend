@@ -16,6 +16,7 @@ import {
 } from "./db/reservation";
 import { getUserFromDB } from "./db/user";
 import { AccountSlot, Reservation } from "./model";
+import { randomInt, sleep } from "./util";
 
 export interface CreateReservationBody {
   count?: number;
@@ -52,6 +53,8 @@ export const create: APIGatewayProxyHandler = async (event, _context) => {
   if (!name) {
     throw new Error(`name is required`);
   }
+
+  await sleep(randomInt(10, 2000));
 
   const id = uuidv4();
   const created = Date.now();
